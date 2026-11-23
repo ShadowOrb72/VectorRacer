@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vector Racer — Classic Edition</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-emblem" aria-hidden="true"></div>
+      <div>
+        <h1>Vector Racer</h1>
+        <div class="brand-sub">CLASSIC CIRCUIT TELEMETRY &bull; PHYSICS EDITION</div>
+      </div>
+    </div>
+
+    <div class="topbar-controls">
+      <div class="circuit-select-wrap">
+        <label for="circuitSelect">CIRCUIT:</label>
+        <select id="circuitSelect" aria-label="Select Circuit"></select>
+      </div>
+      <div class="best-badge" id="bestTimeBadge">BEST LAP: --.--s</div>
+      <button class="btn btn-sm" id="muteBtn" type="button" title="Toggle retro sound effects">SFX: ON</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <!-- Left: Track Arena & Telemetry -->
+    <section class="panel stage-panel">
+      <div class="panel-header">
+        <div>
+          <span class="panel-title" id="trackTitle">Classic Oval</span>
+          <span class="panel-meta" id="trackDifficulty"> &bull; Beginner</span>
+        </div>
+        <div class="panel-meta" id="trackSubtitle">Wide vintage speedway</div>
+      </div>
+
+      <div class="canvas-wrap" id="canvasWrap">
+        <div class="status-banner" id="statusBanner">READY &mdash; ENTER COMMANDS &amp; LAUNCH</div>
+        <canvas id="raceCanvas"></canvas>
+        <div class="canvas-hint" id="canvasHint">Drag on track to measure distance &amp; angle (&theta;&deg;)</div>
+      </div>
+
+      <!-- Telemetry Strip -->
+      <div class="telemetry-strip">
+        <div class="tele-cell">
+          <span class="tele-label">Clock (t)</span>
+          <span class="tele-value" id="teleTime">0.00 s</span>
+        </div>
+        <div class="tele-cell">
+          <span class="tele-label">Position (x, y)</span>
+          <span class="tele-value" id="telePos">46.0, 17.0</span>
+        </div>
+        <div class="tele-cell">
+          <span class="tele-label">Velocity (v)</span>
+          <span class="tele-value accent-v" id="teleSpeed">0.0 m/s</span>
+        </div>
+        <div class="tele-cell">
+          <span class="tele-label">Thrust (a)</span>
+          <span class="tele-value accent-a" id="teleAccel">0.0 m/s&sup2;</span>
+        </div>
+        <div class="tele-cell">
+          <span class="tele-label">Sectors</span>
+          <span class="tele-value accent-g" id="teleSectors">0 / 3</span>
+        </div>
+        <div class="tele-cell">
+          <span class="tele-label">Cursor</span>
+          <span class="tele-value" id="teleCursor">-- , --</span>
+        </div>
+      </div>
+
+      <!-- Playback Controls -->
+      <div class="playback-bar">
+        <button class="btn btn-primary" id="runBtn" type="button">&#9654; Launch (Space)</button>
+        <button class="btn" id="pauseBtn" type="button" disabled>Pause</button>
+        <button class="btn" id="resetBtn" type="button">Reset</button>
+
+        <div class="scrubber-wrap">
+          <span id="scrubCur">0.00s</span>
+          <input type="range" id="timeScrubber" min="0" max="1" step="0.01" value="0" disabled aria-label="Playback time scrubber" />
+          <span id="scrubMax">0.00s</span>
+        </div>
+
+        <div class="speed-group" role="group" aria-label="Playback speed">
+          <button class="speed-btn" data-speed="0.5" type="button">0.5x</button>
+          <button class="speed-btn active" data-speed="1" type="button">1x</button>
+          <button class="speed-btn" data-speed="2" type="button">2x</button>
+          <button class="speed-btn" data-speed="4" type="button">4x</button>
+        </div>
+      </div>
+
+      <!-- Overlay Toggles -->
+      <div class="toggles-bar">
+        <div class="toggles-left">
+          <label><input type="checkbox" id="toggleVectors" checked /> Show Vectors</label>
+          <label><input type="checkbox" id="toggleGhost" checked /> Previous Ghost</label>
+          <label><input type="checkbox" id="toggleTicks" checked /> 1s Time Ticks</label>
+        </div>
+        <div class="legend-dots">
+          <span><i class="dot vel"></i>Velocity</span>
+          <span><i class="dot acc"></i>Accel</span>
+          <span><i class="dot ghost"></i>Last Run</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right: Vector Input Console -->
+    <section class="panel editor-panel">
+      <div class="panel-header">
+        <span class="panel-title">Control Data Input</span>
+        <span class="panel-meta" id="cmdCountMeta">0 commands</span>
+      </div>
+
+      <div class="mode-tabs">
+        <button class="tab-btn active" id="tabText" type="button">Data Format (CSV)</button>
+        <button class="tab-btn" id="tabTable" type="button">Table Builder</button>
+      </div>
+
+      <div class="format-spec">
+        Format: <code>time, duration, acceleration, angle</code><br />
+        Angles: <code>0</code>=Right &nbsp;<code>90</code>=Top &nbsp;<code>180</code>=Left &nbsp;<code>-90</code>=Bottom &nbsp;(overlapping times add vectors)
+      </div>
+
+      <div class="editor-body">
+        <!-- Raw Text Data View -->
+        <div class="code-editor-wrap" id="textEditorWrap">
+          <div class="line-numbers" id="lineNumbers">1</div>
+          <textarea
+            id="programText"
+            spellcheck="false"
+            placeholder="# time, duration, acceleration, angle&#10;0.0, 2.0, 12, 0&#10;2.0, 2.0, 12, 180"
+          ></textarea>
+        </div>
+
+        <!-- Table Builder View -->
+        <div class="table-editor-wrap" id="tableEditorWrap">
+          <div class="table-scroll">
+            <table class="cmd-table">
+              <thead>
+                <tr>
+                  <th>Time (s)</th>
+                  <th>Dur (s)</th>
+                  <th>Accel</th>
+                  <th>Angle (&deg;)</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="tableBody"></tbody>
+            </table>
+          </div>
+          <div class="table-footer">
+            <button class="btn btn-sm btn-green" id="addRowBtn" type="button">+ Add Next Command</button>
+            <button class="btn btn-sm" id="addBrakeBtn" type="button">+ Add Reverse Brake</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="validation-box" id="validationBox">Ready &mdash; syntax valid.</div>
+
+      <div class="editor-actions">
+        <button class="btn btn-sm btn-green" id="loadDemoBtn" type="button">Load Demo Solution</button>
+        <button class="btn btn-sm" id="clearBtn" type="button">Clear</button>
+        <button class="btn btn-sm" id="exportBtn" type="button">Export .txt</button>
+        <button class="btn btn-sm" id="importBtn" type="button">Import .txt</button>
+        <input type="file" id="importFile" accept=".txt,.csv" hidden />
+      </div>
+
+      <div class="summary-box" id="summaryBox">
+        <div class="summary-item">Result: <strong id="sumResult">--</strong></div>
+        <div class="summary-item">Peak Speed: <strong id="sumPeak">--</strong></div>
+        <div class="summary-item">Distance: <strong id="sumDist">--</strong></div>
+        <div class="summary-item">Min Wall Gap: <strong id="sumClear">--</strong></div>
+      </div>
+    </section>
+  </main>
+
+  <script defer src="js/tracks.js"></script>
+  <script defer src="js/physics.js"></script>
+  <script defer src="js/audio.js"></script>
+  <script defer src="js/renderer.js"></script>
+  <script defer src="js/app.js"></script>
+</body>
+</html>

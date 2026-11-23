@@ -1,0 +1,15 @@
+Game vector racer
+web based (html)
+theme:classic
+
+An object is placed inside a looping circuit race.
+User input data to make the object finishes the circuit. The object crashes if touch the wall of the circuit. Game end when the object has circled the circuit.
+
+User input format (data):
+time, duration, acceleration, angle.
+
+*
+Time : start at .. second
+Duration : From time for .. second
+Acceleration : Object acceleration
+Angle : Acceleration towards .. angle (right=0,top=90,left=180,bottom=-90)
