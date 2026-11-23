@@ -52,7 +52,13 @@
     sumResult: document.getElementById('sumResult'),
     sumPeak: document.getElementById('sumPeak'),
     sumDist: document.getElementById('sumDist'),
-    sumClear: document.getElementById('sumClear')
+    sumClear: document.getElementById('sumClear'),
+    velocityLogBox: document.getElementById('velocityLogBox'),
+    logScroll: document.getElementById('logScroll'),
+    velocityLogBody: document.getElementById('velocityLogBody'),
+    logCountMeta: document.getElementById('logCountMeta'),
+    copyLogBtn: document.getElementById('copyLogBtn'),
+    toggleLogBtn: document.getElementById('toggleLogBtn')
   };
 
   // Application State
@@ -63,6 +69,9 @@
     parsed: { commands: [], errors: [] },
     activeRun: null,
     ghostRun: null,
+    runLogEntries: [],
+    renderedLogCount: 0,
+    maxLoggedTime: -1,
     isPlaying: false,
     isPaused: false,
     playbackTime: 0,
@@ -335,6 +344,10 @@
     renderer.particles = [];
     renderer.shakeTime = 0;
     state.activeRun = result;
+    state.runLogEntries = buildPerSecondLog(result);
+    state.renderedLogCount = 0;
+    state.maxLoggedTime = -1;
+    clearVelocityLogTable();
     state.playbackTime = 0;
     state.isPlaying = true;
     state.isPaused = false;
@@ -371,6 +384,9 @@
       // Replay from beginning if finished
       renderer.particles = [];
       renderer.shakeTime = 0;
+      state.renderedLogCount = 0;
+      state.maxLoggedTime = -1;
+      clearVelocityLogTable();
       state.playbackTime = 0;
       state.isPlaying = true;
       state.isPaused = false;
@@ -395,6 +411,10 @@
       state.ghostRun = state.activeRun;
     }
     state.activeRun = null;
+    state.runLogEntries = [];
+    state.renderedLogCount = 0;
+    state.maxLoggedTime = -1;
+    clearVelocityLogTable();
     state.playbackTime = 0;
     state.currentSampleIdx = 0;
     state.endTriggered = false;
@@ -440,6 +460,7 @@
     updateTelemetry(hit.sample);
     updateLineNumbers(hit.sample.activeLines);
     highlightActiveTableRows(hit.sample.activeLines);
+    syncVelocityLogToTime(clamped);
 
     if (state.isPlaying && !state.isPaused) {
       if (hit.sample.checkpointIdx > state.lastCheckpointPinged && hit.sample.checkpointIdx <= state.track.checkpoints.length) {
@@ -533,6 +554,158 @@
   function escapeHtml(str) {
     return str.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   }
+
+  // ---------------------------------------------------------------------------
+  // Per-Second Velocity Vector Log
+  // ---------------------------------------------------------------------------
+  function formatVelocityAngle(vx, vy, speed) {
+    if (speed < 0.05) return '—';
+    let deg = (Math.atan2(vy, vx) * 180) / Math.PI;
+    if (Math.abs(deg + 180) < 0.05) deg = 180; // normalize -180° to 180°
+    if (Math.abs(deg) < 0.05) deg = 0;
+    return `${deg.toFixed(1)}°`;
+  }
+
+  function buildPerSecondLog(run) {
+    if (!run || !run.samples || run.samples.length === 0) return [];
+    const entries = [];
+    const totalT = run.totalTime;
+    const maxSec = Math.floor(totalT + 1e-6);
+
+    for (let sec = 0; sec <= maxSec; sec++) {
+      const hit = VR.sampleAtTime(run.samples, sec);
+      if (!hit) continue;
+      const s = hit.sample;
+      entries.push({
+        t: sec,
+        label: `${sec.toFixed(2)} s`,
+        speed: s.speed,
+        angleText: formatVelocityAngle(s.vx, s.vy, s.speed),
+        x: s.x,
+        y: s.y,
+        tag: ''
+      });
+    }
+
+    // Append final exact finish/crash/stop timestamp if not already an integer second
+    if (totalT - maxSec > 0.015) {
+      const last = run.samples[run.samples.length - 1];
+      let tag = '';
+      if (run.status === 'finished') tag = 'FINISH';
+      else if (run.status === 'crashed') tag = 'CRASH';
+      else if (run.status === 'stopped') tag = 'STOP';
+      entries.push({
+        t: totalT,
+        label: `${totalT.toFixed(2)} s${tag ? ' (' + tag + ')' : ''}`,
+        speed: last.speed,
+        angleText: formatVelocityAngle(last.vx, last.vy, last.speed),
+        x: last.x,
+        y: last.y,
+        tag
+      });
+    } else if (entries.length > 0 && (run.status === 'finished' || run.status === 'crashed')) {
+      const tag = run.status === 'finished' ? 'FINISH' : 'CRASH';
+      entries[entries.length - 1].tag = tag;
+      entries[entries.length - 1].label = `${totalT.toFixed(2)} s (${tag})`;
+    }
+
+    return entries;
+  }
+
+  function clearVelocityLogTable() {
+    el.velocityLogBody.innerHTML =
+      '<tr class="log-empty-row"><td colspan="4">Launch untuk mencatat kecepatan, arah sudut, dan posisi per detik.</td></tr>';
+    el.logCountMeta.textContent = '0 entries';
+  }
+
+  function syncVelocityLogToTime(t) {
+    const entries = state.runLogEntries;
+    if (!entries || entries.length === 0) return;
+
+    if (t > state.maxLoggedTime) {
+      state.maxLoggedTime = t;
+    }
+
+    // Keep all rows up to the furthest time reached so scrubbing/clicking back never hides them
+    let visibleCount = 0;
+    for (let i = 0; i < entries.length; i++) {
+      if (entries[i].t <= state.maxLoggedTime + 1e-4) visibleCount = i + 1;
+      else break;
+    }
+
+    // Determine which row corresponds to current playback/scrubber timestamp t
+    let activeIdx = -1;
+    for (let i = 0; i < visibleCount; i++) {
+      if (entries[i].t <= t + 1e-4) activeIdx = i;
+      else break;
+    }
+
+    if (visibleCount > state.renderedLogCount) {
+      if (state.renderedLogCount === 0) {
+        el.velocityLogBody.innerHTML = '';
+      }
+
+      const frag = document.createDocumentFragment();
+      for (let i = state.renderedLogCount; i < visibleCount; i++) {
+        const entry = entries[i];
+        const tr = document.createElement('tr');
+        tr.className = 'log-row' + (entry.tag === 'FINISH' ? ' end-finish' : entry.tag === 'CRASH' ? ' end-crash' : '');
+        tr.dataset.idx = String(i);
+        tr.title = `Klik untuk lompat ke t = ${entry.t.toFixed(2)}s`;
+        tr.innerHTML = `
+          <td>${entry.label}</td>
+          <td>${entry.speed.toFixed(2)} m/s</td>
+          <td>${entry.angleText}</td>
+          <td>(${entry.x.toFixed(1)}, ${entry.y.toFixed(1)})</td>
+        `;
+        tr.addEventListener('click', () => {
+          if (!state.activeRun) return;
+          if (state.isPlaying && !state.isPaused) {
+            state.isPaused = true;
+            el.pauseBtn.textContent = 'Resume';
+            audio.stopEngine();
+          }
+          state.endTriggered = entry.t >= state.activeRun.totalTime - 1e-4;
+          applySampleAt(entry.t);
+        });
+        frag.appendChild(tr);
+      }
+
+      el.velocityLogBody.appendChild(frag);
+      el.logCountMeta.textContent = `${visibleCount} ${visibleCount === 1 ? 'entry' : 'entries'}`;
+      if (state.isPlaying && !state.isPaused) {
+        el.logScroll.scrollTop = el.logScroll.scrollHeight;
+      }
+      state.renderedLogCount = visibleCount;
+    }
+
+    // Highlight active row for current timestamp t
+    el.velocityLogBody.querySelectorAll('tr.log-row').forEach((tr) => {
+      tr.classList.toggle('active-log', Number(tr.dataset.idx) === activeIdx);
+    });
+  }
+
+  // Log header buttons
+  el.toggleLogBtn.addEventListener('click', () => {
+    const collapsed = el.velocityLogBox.classList.toggle('collapsed');
+    el.toggleLogBtn.textContent = collapsed ? 'Show' : 'Hide';
+  });
+
+  el.copyLogBtn.addEventListener('click', () => {
+    const count = state.renderedLogCount;
+    if (!count || !state.runLogEntries.length) return;
+    const header = 'Waktu\tKecepatan\tArah Sudut\tPosisi (x, y)';
+    const lines = state.runLogEntries
+      .slice(0, count)
+      .map((e) => `${e.label}\t${e.speed.toFixed(2)} m/s\t${e.angleText}\t(${e.x.toFixed(1)}, ${e.y.toFixed(1)})`);
+    const text = [header, ...lines].join('\n');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        el.copyLogBtn.textContent = 'Copied!';
+        setTimeout(() => { el.copyLogBtn.textContent = 'Copy'; }, 1200);
+      }).catch(() => {});
+    }
+  });
 
   // ---------------------------------------------------------------------------
   // Event Listeners

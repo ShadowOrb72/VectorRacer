@@ -3,16 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Vector Racer — Classic Edition</title>
+  <title>Vector Racer — Classic Edition | Wilbert B</title>
+  <link rel="icon" type="image/png" href="logo.png" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <div class="brand-emblem" aria-hidden="true"></div>
+      <div class="brand-logos">
+        <img src="logo.png" alt="Logo" class="brand-logo" />
+        <div class="brand-emblem" aria-hidden="true"></div>
+      </div>
       <div>
         <h1>Vector Racer</h1>
-        <div class="brand-sub">CLASSIC CIRCUIT TELEMETRY &bull; PHYSICS EDITION</div>
+        <div class="brand-sub">CLASSIC CIRCUIT TELEMETRY &bull; BY <span class="author-highlight">WILBERT B</span></div>
       </div>
     </div>
 
@@ -104,6 +108,35 @@
           <span><i class="dot ghost"></i>Last Run</span>
         </div>
       </div>
+
+      <!-- Compact Per-Second Velocity Log -->
+      <div class="velocity-log-box" id="velocityLogBox">
+        <div class="log-header">
+          <span class="log-title">VELOCITY LOG (PER 1s)</span>
+          <div class="log-header-actions">
+            <span class="log-count" id="logCountMeta">0 entries</span>
+            <button class="log-mini-btn" id="copyLogBtn" type="button" title="Copy log text">Copy</button>
+            <button class="log-mini-btn" id="toggleLogBtn" type="button" title="Collapse or expand log">Hide</button>
+          </div>
+        </div>
+        <div class="log-scroll" id="logScroll">
+          <table class="log-table">
+            <thead>
+              <tr>
+                <th>Waktu</th>
+                <th>Kecepatan</th>
+                <th>Arah Sudut</th>
+                <th>Posisi (x, y)</th>
+              </tr>
+            </thead>
+            <tbody id="velocityLogBody">
+              <tr class="log-empty-row">
+                <td colspan="4">Launch untuk mencatat kecepatan, arah sudut, dan posisi per detik.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <!-- Right: Vector Input Console -->
@@ -175,6 +208,14 @@
       </div>
     </section>
   </main>
+
+  <footer class="classic-footer">
+    <div class="footer-left">
+      <img src="logo.png" alt="Logo" class="footer-logo" />
+      <span>Vector Racer &mdash; Classic Edition</span>
+    </div>
+    <div class="footer-credit">Created by <strong>Wilbert B</strong></div>
+  </footer>
 
   <script defer src="js/tracks.js"></script>
   <script defer src="js/physics.js"></script>
