@@ -332,6 +332,8 @@
     }
 
     const result = VR.simulateRun(state.track, state.parsed.commands);
+    renderer.particles = [];
+    renderer.shakeTime = 0;
     state.activeRun = result;
     state.playbackTime = 0;
     state.isPlaying = true;
@@ -367,6 +369,8 @@
       setBanner('RACING — TELEMETRY LIVE', 'running');
     } else if (!state.isPlaying) {
       // Replay from beginning if finished
+      renderer.particles = [];
+      renderer.shakeTime = 0;
       state.playbackTime = 0;
       state.isPlaying = true;
       state.isPaused = false;
@@ -385,6 +389,8 @@
 
   function resetToStart(keepGhost) {
     stopPlayback();
+    renderer.particles = [];
+    renderer.shakeTime = 0;
     if (keepGhost && state.activeRun) {
       state.ghostRun = state.activeRun;
     }
@@ -508,13 +514,17 @@
       el.sumClear.textContent = '--';
       return;
     }
-    const labelMap = {
-      finished: `FINISH (${run.finishTime.toFixed(2)}s)`,
-      crashed: `CRASH @ ${run.crashPoint.t.toFixed(2)}s`,
-      stopped: `STOPPED @ ${run.totalTime.toFixed(2)}s`,
-      timeout: `TIMEOUT (${run.totalTime.toFixed(1)}s)`
-    };
-    el.sumResult.textContent = labelMap[run.status] || run.status;
+    let resultLabel = run.status;
+    if (run.status === 'finished' && run.finishTime !== null) {
+      resultLabel = `FINISH (${run.finishTime.toFixed(2)}s)`;
+    } else if (run.status === 'crashed' && run.crashPoint) {
+      resultLabel = `CRASH @ ${run.crashPoint.t.toFixed(2)}s`;
+    } else if (run.status === 'stopped') {
+      resultLabel = `STOPPED @ ${run.totalTime.toFixed(2)}s`;
+    } else if (run.status === 'timeout') {
+      resultLabel = `TIMEOUT (${run.totalTime.toFixed(1)}s)`;
+    }
+    el.sumResult.textContent = resultLabel;
     el.sumPeak.textContent = `${run.metrics.maxSpeed.toFixed(1)} m/s`;
     el.sumDist.textContent = `${run.metrics.totalDistance.toFixed(1)} m`;
     el.sumClear.textContent = `${run.metrics.minClearance.toFixed(2)} m`;
@@ -681,22 +691,26 @@
   // ---------------------------------------------------------------------------
   let lastFrameTs = performance.now();
   function frame(now) {
-    const dt = Math.min(0.05, (now - lastFrameTs) / 1000);
-    lastFrameTs = now;
-
-    if (state.isPlaying && !state.isPaused && state.activeRun) {
-      const nextT = state.playbackTime + dt * state.playbackSpeed;
-      if (nextT >= state.activeRun.totalTime) {
-        applySampleAt(state.activeRun.totalTime);
-        handleRunComplete();
-      } else {
-        applySampleAt(nextT);
-      }
-    }
-
-    renderer.updateEffects(dt);
-    renderer.render(state);
     requestAnimationFrame(frame);
+    try {
+      const dt = Math.min(0.05, Math.max(0, (now - lastFrameTs) / 1000));
+      lastFrameTs = now;
+
+      if (state.isPlaying && !state.isPaused && state.activeRun) {
+        const nextT = state.playbackTime + dt * state.playbackSpeed;
+        if (nextT >= state.activeRun.totalTime) {
+          applySampleAt(state.activeRun.totalTime);
+          handleRunComplete();
+        } else {
+          applySampleAt(nextT);
+        }
+      }
+
+      renderer.updateEffects(dt);
+      renderer.render(state);
+    } catch (err) {
+      console.error('VectorRacer frame error:', err);
+    }
   }
 
   // Expose debug/test handle for easy inspection
